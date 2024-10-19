@@ -4,6 +4,7 @@ CREATE TABLE Paciente (
     nombre VARCHAR(50) NOT NULL,
     apellido_paterno VARCHAR(50) NOT NULL,
     apellido_materno VARCHAR(50),
+    fecha_nacimiento DATE NOT NULL,
     correo VARCHAR(100) UNIQUE NOT NULL,
     direccion TEXT,
     telefono VARCHAR(15),
@@ -35,6 +36,7 @@ CREATE TABLE Prescripcion (
     id_medicamento INT REFERENCES Medicamento(id),
     dosis VARCHAR(100) NOT NULL,
     frecuencia VARCHAR(100) NOT NULL,
+    fecha_finalizacion DATE NOT NULL,
     via_administracion VARCHAR(50) NOT NULL
 );
 
