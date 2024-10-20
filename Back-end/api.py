@@ -7,25 +7,29 @@ from conexion_crud import *
 import re
 app = Flask(__name__)
 
+import re
+import json
+
 def extraer_json(texto):
-    # Usar una expresión regular para capturar el JSON entre <objeto> y </objeto>
-    patron = r'<objeto>(.*?)</objeto>'
+    # Usar una expresión regular para capturar el JSON entre {}
+    patron = r'\{.*?\}'
     
-    # Buscar el contenido entre <objeto> y </objeto>
-    resultado = re.search(patron, texto)
+    # Buscar el contenido entre {} en el texto
+    resultado = re.search(patron, texto, re.DOTALL)
     
     if resultado:
-        json_str = resultado.group(1)  # Extraer el contenido capturado
+        json_str = resultado.group(0)  # Extraer el contenido capturado
         try:
             # Cargar la cadena como JSON
             json_data = json.loads(json_str)
             return json_data
         except json.JSONDecodeError as e:
             print(f"Error al decodificar JSON: {e}")
-            return None
+            return {}
     else:
         print("No se encontró JSON en el texto.")
         return None
+
 
 # Función para unir dos descripciones, recibe dos diccionarios
 def join_presc(presc1, presc2):
@@ -83,15 +87,52 @@ def submit_image():
         # Guardar
         # Crear un prompt para la extracción de datos
         llama_payload = {
-        "prompt": "Analyze the provided medical recipe and return only a JSON format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. Make sure you return a JSON file and only a JSON file. Please, dont include any other thing in the response like the intro to the response. Include the json response in the following format json <response>"
-        }
-        # Llamar a la API de LLaMa
+         "prompt": '''Analyze the provided medical recipe and return a json with the following format.
+                    {
+                        "patient_name": "<patient name>",
+                        "doctor_name": "<doctor>",
+                        "doctor_license": <license>,
+                        "address": "<address>",
+                        "date": "<date>",
+                        "prescription": "<prescription>"
+                    }
+                    .The prescription should be the remaining text. Dates should be in date data type. License should be int type. Format the output to be a JSON. Do not include any other thing in the output'''}
+                            # Llamar a la API de LLaMa
         llama_response = call_llama_api_img(image_file, llama_payload)
         # Salida de llama, transformación a json
         if llama_response:
-            return jsonify(
-                llama_response
-            ), 200
+            tmp = llama_response['result']
+            response_data =extraer_json(tmp)
+            print(response_data)
+            # connection = connect_to_mysql()
+
+            # Acceder a los campos individuales
+            # patient_name = response_data.get('patient_name')
+            # doctor_name = response_data.get('doctor_name')
+            # doctor_license = response_data.get('doctor_license')
+            # address = response_data.get('address')
+            # date = response_data.get('date')
+            # prescription = response_data.get('prescription')
+
+            # insert_generic(connection, 'receta', jsonify({
+            #     'id_paciente': patient_name,
+            #     'doctor': doctor_name,
+            #     'cedula_profesional': doctor_license,
+            #     'direccion': address,
+            #     'fecha': date,
+            #     'diagnostico': prescription
+            # }))
+            # connection.close()
+
+            return jsonify({
+                'result': llama_response['result'],
+                # 'patient_name': patient_name,
+                # 'doctor_name': doctor_name,
+                # 'doctor_license': doctor_license,
+                # 'address': address,
+                # 'date': date,
+                # 'prescription': prescription
+            }), 200
         else:
             return jsonify({'error': 'Error calling LLaMa API'}), 500
         # To do: Añadir a la base de datos
