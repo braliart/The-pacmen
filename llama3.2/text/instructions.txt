@@ -1,0 +1,3 @@
+We need to follow the instructions from this link:
+
+https://docs.runpod.io/tutorials/pods/run-ollama
