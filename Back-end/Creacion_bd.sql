@@ -1,6 +1,6 @@
 -- Creación de la tabla Paciente
-CREATE TABLE Paciente (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS Paciente (
+    id_paciente PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL,
     apellido_paterno VARCHAR(50) NOT NULL,
     apellido_materno VARCHAR(50),
@@ -12,9 +12,9 @@ CREATE TABLE Paciente (
 );
 
 -- Creación de la tabla Receta
-CREATE TABLE Receta (
-    id SERIAL PRIMARY KEY,
-    id_paciente INT REFERENCES Paciente(id),
+CREATE TABLE IF NOT EXISTS Receta (
+    id_receta PRIMARY KEY,
+    id_paciente INT REFERENCES Paciente(id_paciente),
     fecha DATE NOT NULL,
     diagnostico TEXT NOT NULL,
     doctor VARCHAR(100) NOT NULL,
@@ -23,17 +23,17 @@ CREATE TABLE Receta (
 );
 
 -- Creación de la tabla Medicamento
-CREATE TABLE Medicamento (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS Medicamento (
+    id_medicamento PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     sustancia VARCHAR(100) NOT NULL
 );
 
 -- Creación de la tabla Prescripcion
-CREATE TABLE Prescripcion (
-    id SERIAL PRIMARY KEY,
-    id_receta INT REFERENCES Receta(id),
-    id_medicamento INT REFERENCES Medicamento(id),
+CREATE TABLE IF NOT EXISTS Prescripcion (
+    id_prescripcion PRIMARY KEY,
+    id_receta INT REFERENCES Receta(id_receta),
+    id_medicamento INT REFERENCES Medicamento(id_medicamento),
     dosis VARCHAR(100) NOT NULL,
     frecuencia VARCHAR(100) NOT NULL,
     fecha_finalizacion DATE NOT NULL,
@@ -41,9 +41,9 @@ CREATE TABLE Prescripcion (
 );
 
 --Creación de la tabla Output
-CREATE TABLE Output (
-    id SERIAL PRIMARY KEY,
-    id_receta1 INT REFERENCES Receta(id),
-    id_receta2 INT REFERENCES Receta(id),
+CREATE TABLE IF NOT EXISTS Output (
+    id_output PRIMARY KEY,
+    id_receta1 INT REFERENCES Receta(id_receta),
+    id_receta2 INT REFERENCES Receta(id_receta),
     resultado TEXT
 );
