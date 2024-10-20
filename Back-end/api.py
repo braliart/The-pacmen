@@ -4,8 +4,28 @@ from flask import Flask, request, jsonify
 import json
 import pymysql
 from conexion_crud import *
+import re
 app = Flask(__name__)
 
+def extraer_json(texto):
+    # Usar una expresión regular para capturar el JSON entre <objeto> y </objeto>
+    patron = r'<objeto>(.*?)</objeto>'
+    
+    # Buscar el contenido entre <objeto> y </objeto>
+    resultado = re.search(patron, texto)
+    
+    if resultado:
+        json_str = resultado.group(1)  # Extraer el contenido capturado
+        try:
+            # Cargar la cadena como JSON
+            json_data = json.loads(json_str)
+            return json_data
+        except json.JSONDecodeError as e:
+            print(f"Error al decodificar JSON: {e}")
+            return None
+    else:
+        print("No se encontró JSON en el texto.")
+        return None
 
 # Función para unir dos descripciones, recibe dos diccionarios
 def join_presc(presc1, presc2):
@@ -36,11 +56,13 @@ def call_llama_api(data, llama_api_url_opt):
         return {"error": str(e)}
 def call_llama_api_img(img, prompt):
     # URL de la API de LLaMa 3.2
-    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-url'
+    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-encoded'
+    files = {
+        'file': img  # 'file' es la clave esperada por la API
+    }
     try:
         # Hacer la llamada
-        response = requests.post(llama_api_url, files={'image': img}, data=prompt)
-
+        response = requests.post(llama_api_url, files=files, data=prompt)
         # Suponemos que LLaMa responde en formato JSON con la estructura que se menciona
         if response.status_code == 200:
             return response.json()  # Devolver el JSON de la respuesta de LLaMa
@@ -61,17 +83,15 @@ def submit_image():
         # Guardar
         # Crear un prompt para la extracción de datos
         llama_payload = {
-        "prompt": "Analyze the provided medical recipe and return only a text in a json format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. Make sure you return a JSON file and only a JSON file. Please, dont include any other thing in the response. \n",
+        "prompt": "Analyze the provided medical recipe and return only a JSON format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. Make sure you return a JSON file and only a JSON file. Please, dont include any other thing in the response like the intro to the response. Include the json response in the following format json <response>"
         }
         # Llamar a la API de LLaMa
-        llama_response = call_llama_api(image_file, llama_payload)
+        llama_response = call_llama_api_img(image_file, llama_payload)
         # Salida de llama, transformación a json
         if llama_response:
-            return jsonify({
-                'done': llama_response['done'],
-                'done_reason': llama_response['done_reason'],
-                'response': llama_response['response']
-            }), 200
+            return jsonify(
+                llama_response
+            ), 200
         else:
             return jsonify({'error': 'Error calling LLaMa API'}), 500
         # To do: Añadir a la base de datos
@@ -190,7 +210,7 @@ def submit_diagnosis():
 # Ruta para comparar dos descripciones
 @app.route('/api/compare_descriptions', methods=['POST'])
 def compare_descriptions():
-    
+
     #URL de la API de LLaMa 3.2
     llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     # Json de las descripciones, ejemplos
