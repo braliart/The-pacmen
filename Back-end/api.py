@@ -9,15 +9,39 @@ app = Flask(__name__)
 recipes = []
 images = []
 prescriptions = []
-
+# Función para unir dos descripciones, recibe dos diccionarios
+def join_presc(presc1, presc2):
+    # Unir las descripciones
+    # Unir las descripciones clave por clave
+    for key in presc2:
+        if key in presc1:
+            # Combinar listas si las claves ya existen
+            presc1[key] += presc2[key]
+        else:
+            # Añadir nuevas claves
+            presc1[key] = presc2[key]
+    return presc1
 # llamada a la API de LLaMa
-def call_llama_api(data):
+def call_llama_api(data, llama_api_url_opt):
     # URL de la API de LLaMa 3.2
-    llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
-    
+    llama_api_url = llama_api_url_opt
     try:
         # Hacer la llamada
         response = requests.post(llama_api_url, json=data)
+
+        # Suponemos que LLaMa responde en formato JSON con la estructura que se menciona
+        if response.status_code == 200:
+            return response.json()  # Devolver el JSON de la respuesta de LLaMa
+        else:
+            return {"error": "Error in LLaMa API call", "status_code": response.status_code}
+    except Exception as e:
+        return {"error": str(e)}
+def call_llama_api_img(img, prompt):
+    # URL de la API de LLaMa 3.2
+    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-url'
+    try:
+        # Hacer la llamada
+        response = requests.post(llama_api_url, files={'image': img}, data=prompt)
 
         # Suponemos que LLaMa responde en formato JSON con la estructura que se menciona
         if response.status_code == 200:
@@ -30,25 +54,26 @@ def call_llama_api(data):
 # Ruta para la extracción de datos de la receta en imagen
 @app.route('/api/submit_image', methods=['POST'])
 def submit_image():
-    # Obtener la imagen en HTML (puedes recibirla como archivo o base64)
+    # URL de la API de LLaMa 3.2
+    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-url'
+    # Obtener la imagen en HTML
     image_file = request.files['image']
-    # Convertir la imagen en base64
-    image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
 
-    if image_base64:
+    if image_file:
         # Guardar
-        images.append(image_base64)
-        # Crear un prompt para extraer los datos de la receta (fecha, dr, prescripción, etc.)
-        prompt = "Extract the following details from the provided image."
-
+        images.append(image_file)
+        # Crear un prompt para la extracción de datos
+        llama_payload = {
+        "prompt": "Analyze the provided medical recipe and return only a text in a json format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. Make sure you return a JSON file and only a JSON file. Please, dont include any other thing in the response. \n",
+        }
         # Llamar a la API de LLaMa
-        llama_response = call_llama_api({'input': image_base64, 'prompt': prompt})
+        llama_response = call_llama_api(image_file, llama_payload)
         # Salida de llama, transformación a json
         if llama_response:
             return jsonify({
-                'medications': llama_response['medications'],
-                'diagnosis': llama_response['diagnosis'],
-                'side_effects': llama_response['side_effects']
+                'done': llama_response['done'],
+                'done_reason': llama_response['done_reason'],
+                'response': llama_response['response'],
             }), 200
         else:
             return jsonify({'error': 'Error calling LLaMa API'}), 500
@@ -59,6 +84,7 @@ def submit_image():
 # Ruta para la extracción de datos de la receta en texto
 @app.route('/api/submit_recipe', methods=['POST'])
 def submit_recipe():
+    llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     # Recibir el texto de la receta desde el cuerpo de la solicitud
     data = request.get_json()
     recipe_text = data.get('recipe_text')
@@ -66,9 +92,8 @@ def submit_recipe():
 
     if recipe_text:
         # Almacenar la receta
-        recipes.append(recipe_text)
-
-        # Crear un prompt para la extracción de datos 
+        recipes.append(recipe_text,llama_api_url)
+        # Crear un prompt para la extracción de datos
         llama_payload = {
         "model": "llama3.2",
         "prompt": "Analyze the provided medical recipe and return only a text in a json format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. \n " + recipe_text,
@@ -112,6 +137,7 @@ def submit_recipe():
 # Post Ruta para obtener los datos de la prescripción.
 @app.route('/api/get_diagnosis', methods=['POST'])
 def submit_diagnosis(): 
+    llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     prescription = request.get_json()
     prescription_text = prescription.get('recipe_text')
     if prescription:
@@ -122,7 +148,7 @@ def submit_diagnosis():
         "stream": False
     }
         # Llamar a la API de LLaMa 3.2
-        llama_response = call_llama_api(llama_payload)
+        llama_response = call_llama_api(llama_payload, llama_api_url)
         # Salida de llama, transformación a json
         if llama_response:
             # Datos individuales
@@ -150,34 +176,34 @@ def submit_diagnosis():
 # Ruta para comparar dos descripciones
 @app.route('/api/compare_descriptions', methods=['POST'])
 def compare_descriptions():
+    #URL de la API de LLaMa 3.2
+    llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     # Json de las descripciones, ejemplos
     descripcion1 = {"dose": ["10mg","20mg"],
-                            "end_date": "2023-11-30",
-                            "frequency": ["1 tablet every 12 hours for 3 days", "1 tablet once daily before bedtime for five days"],
-                            "medication_substance": ["Lisinopril","Atorvastatin"],
-                            "medications_commercial_name": ["Lisinopril (Zestril)", "Atorvastatin (Lipitor)"],
-                            "route_of_administration": ["oral", "oral"]}
+                    "frequency": ["1 tablet every 12 hours for 3 days", "1 tablet once daily before bedtime for five days"],
+                    "medication_substance": ["Lisinopril","Atorvastatin"],
+                    "route_of_administration": ["oral", "oral"]}
     descripcion2 = {"dose": ["10mg","25mg"],
-                            "end_date": "2023-11-30",
-                            "frequency": ["1 tablet every 12 hours for 3 days", "2 tablets every 8 hours for 6 days"],
-                            "medication_substance": ["Lisinopril","Topiramate"],
-                            "medications_commercial_name": ["Lisinopril (Zestril)", "Topiramate (Topamax)"],
-                            "route_of_administration": ["oral", "oral"]}
+                    "frequency": ["1 tablet every 12 hours for 3 days", "2 tablets every 8 hours for 6 days"],
+                    "medication_substance": ["Lisinopril","Topiramate"],
+                    "route_of_administration": ["oral", "oral"]}
+    # Unir las descripciones
+    descripcion1 = join_presc(descripcion1, descripcion2)
     # Comparación
-    if descripcion1 and descripcion2:
+    if descripcion1:
         # Crear un prompt para la comparación de las descripciones
+        #Quizas probar con varios prompts a la vez para obtener mejores respuestas
         llama_payload = {
             "model": "llama3.2",
             "prompt": (
-                "Analize the provided descriptions return only a text in a json format with the fields: 'contraindication', 'repetitions','Result'. Contradictions should be a list of medications in both descriptions that can cause contraindications, or NULL if none. Repetitions should be a list of repeated medications, or NULL if none. Result should be an explanation of the result. \n"
-                "Description 1: " + json.dumps(descripcion1) + "\n"
-                "Description 2: " + json.dumps(descripcion2)
+                "Analize the provided description return only a text in a json format containing: 'contraindication', 'repetitions','Result'. Contradictions is a list of medications that can cause side effects if consumed together, or NULL if none. Repetitions is a list of repeated medications, or NULL if none. Result is a text describing the interaction between medications that can cause side effects, write 'no data' if there is none. \n"
+                "Description: " + json.dumps(descripcion1) + "\n"
             ),
             "stream": False
         }
 
         # Llamar a la API de LLaMa 3.2
-        llama_response = call_llama_api(llama_payload)
+        llama_response = call_llama_api(llama_payload, llama_api_url)
 
         if llama_response:
             try:
