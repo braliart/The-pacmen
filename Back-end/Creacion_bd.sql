@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS Paciente (
     correo VARCHAR(100) UNIQUE NOT NULL,
     direccion TEXT,
     telefono VARCHAR(15),
-    alergias TEXT
+    alergias TEXT,
+    fumador BOOLEAN NOT NULL,
+    se_droga TEXT,
+    alcohol BOOLEAN NOT NULL
 );
 
 -- Creación de la tabla Receta
