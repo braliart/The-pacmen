@@ -2,13 +2,11 @@ import base64
 import requests
 from flask import Flask, request, jsonify
 import json
-
+import pymysql
+from conexion_crud import *
 app = Flask(__name__)
 
-# Almacenamiento temporal de recetas, imagenes
-recipes = []
-images = []
-prescriptions = []
+
 # Función para unir dos descripciones, recibe dos diccionarios
 def join_presc(presc1, presc2):
     # Unir las descripciones
@@ -55,13 +53,12 @@ def call_llama_api_img(img, prompt):
 @app.route('/api/submit_image', methods=['POST'])
 def submit_image():
     # URL de la API de LLaMa 3.2
-    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-url'
+    llama_api_url = 'https://qd3hoj0jwfszxx-80.proxy.runpod.net/process-image-encoded'
     # Obtener la imagen en HTML
     image_file = request.files['image']
 
     if image_file:
         # Guardar
-        images.append(image_file)
         # Crear un prompt para la extracción de datos
         llama_payload = {
         "prompt": "Analyze the provided medical recipe and return only a text in a json format containing the data of the recipe 'patient_name','doctor_name','doctor_license','address','date','prescription'. The prescription should be the remaining text. Dates should be in date data type. License should be int type. Make sure you return a JSON file and only a JSON file. Please, dont include any other thing in the response. \n",
@@ -73,7 +70,7 @@ def submit_image():
             return jsonify({
                 'done': llama_response['done'],
                 'done_reason': llama_response['done_reason'],
-                'response': llama_response['response'],
+                'response': llama_response['response']
             }), 200
         else:
             return jsonify({'error': 'Error calling LLaMa API'}), 500
@@ -91,8 +88,6 @@ def submit_recipe():
 
 
     if recipe_text:
-        # Almacenar la receta
-        recipes.append(recipe_text,llama_api_url)
         # Crear un prompt para la extracción de datos
         llama_payload = {
         "model": "llama3.2",
@@ -105,6 +100,7 @@ def submit_recipe():
         if llama_response:
             # Convertir el campo 'response' de cadena JSON a un diccionario
             response_data = json.loads(llama_response['response'])
+            connection = connect_to_mysql()
 
             # Acceder a los campos individuales
             patient_name = response_data.get('patient_name')
@@ -114,10 +110,15 @@ def submit_recipe():
             date = response_data.get('date')
             prescription = response_data.get('prescription')
 
-            # Añadir a la base
-
-            #Base temporal
-            prescriptions.append(prescription)
+            insert_generic(connection, 'receta', jsonify({
+                'id_paciente': patient_name,
+                'doctor': doctor_name,
+                'cedula_profesional': doctor_license,
+                'direccion': address,
+                'fecha': date,
+                'diagnostico': prescription
+            }))
+            connection.close()
 
             return jsonify({
                 'done': llama_response['done'],
@@ -139,6 +140,7 @@ def submit_recipe():
 def submit_diagnosis(): 
     llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     prescription = request.get_json()
+    id_receta1 = prescription.get('recipe_id')
     prescription_text = prescription.get('recipe_text')
     if prescription:
         # Crear un prompt para la extracción de datos 
@@ -160,6 +162,18 @@ def submit_diagnosis():
             route_of_administration = response_data.get('route_of_administration')
             end_date = response_data.get('end_date')
 
+            connection = connect_to_mysql()
+
+            insert_generic(connection, 'receta', jsonify({
+                'id_receta': id_receta1,
+                'nombre_comercial': medications_commercial_name,
+                'nombre_sustancia': medication_substance,
+                'dosis': dose,
+                'frecuencia': frequency,
+                'via_administracion': route_of_administration,
+                'fecha_finalizacion': end_date
+            }))
+            connection.close()
             return jsonify({
                 'done': llama_response['done'],
                 'done_reason': llama_response['done_reason'],
@@ -176,6 +190,7 @@ def submit_diagnosis():
 # Ruta para comparar dos descripciones
 @app.route('/api/compare_descriptions', methods=['POST'])
 def compare_descriptions():
+    
     #URL de la API de LLaMa 3.2
     llama_api_url = 'https://98n1uj94w4mt4i-11434.proxy.runpod.net/api/generate'
     # Json de las descripciones, ejemplos
